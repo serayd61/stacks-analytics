@@ -1,0 +1,33 @@
+{
+  "name": "stacks-analytics",
+  "version": "1.0.0",
+  "description": "DeFi analytics library for Stacks blockchain - price feeds, TVL tracking, and market data",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest",
+    "lint": "eslint src --ext .ts"
+  },
+  "keywords": [
+    "stacks",
+    "bitcoin",
+    "defi",
+    "analytics",
+    "tvl",
+    "price-oracle"
+  ],
+  "author": "serayd61",
+  "license": "MIT",
+  "dependencies": {
+    "@stacks/blockchain-api-client": "^8.0.0",
+    "@stacks/network": "^7.0.0",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  }
+}

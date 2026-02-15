@@ -30,6 +30,22 @@ export interface ProtocolMetrics {
   transactions24h: number;
 }
 
+export interface WhaleTransaction {
+  txId: string;
+  sender: string;
+  recipient: string;
+  amount: number;
+  timestamp: number;
+  blockHeight: number;
+}
+
+export interface WhaleStats {
+  totalWhaleTransactions24h: number;
+  totalWhaleVolume24h: number;
+  largestTransaction: WhaleTransaction | null;
+  topWhales: { address: string; volume: number }[];
+}
+
 export interface AnalyticsConfig {
   network: 'mainnet' | 'testnet';
   apiUrl: string;
@@ -164,6 +180,110 @@ export class StacksAnalytics {
 
     this.setCache(cacheKey, volume);
     return volume;
+  }
+
+  /**
+   * Get whale transactions (transfers > threshold)
+   * @param threshold Minimum STX amount (default: 100,000 STX)
+   * @param limit Maximum number of transactions to return
+   */
+  async getWhaleTransactions(threshold: number = 100000, limit: number = 50): Promise<WhaleTransaction[]> {
+    const cacheKey = `whale-txs-${threshold}-${limit}`;
+    const cached = this.getFromCache(cacheKey);
+    if (cached) return cached;
+
+    try {
+      // Fetch recent STX transfers
+      const response = await fetch(
+        `${this.config.apiUrl}/extended/v1/tx?type=token_transfer&limit=${limit * 2}`
+      );
+      const data = await response.json();
+
+      const whaleTransactions: WhaleTransaction[] = [];
+      const thresholdMicro = threshold * 1_000_000;
+
+      for (const tx of data.results || []) {
+        if (tx.token_transfer && Number(tx.token_transfer.amount) >= thresholdMicro) {
+          whaleTransactions.push({
+            txId: tx.tx_id,
+            sender: tx.sender_address,
+            recipient: tx.token_transfer.recipient_address,
+            amount: Number(tx.token_transfer.amount) / 1_000_000,
+            timestamp: tx.burn_block_time * 1000,
+            blockHeight: tx.block_height,
+          });
+        }
+        if (whaleTransactions.length >= limit) break;
+      }
+
+      this.setCache(cacheKey, whaleTransactions);
+      return whaleTransactions;
+    } catch (error) {
+      console.error('Failed to fetch whale transactions:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get whale statistics for the last 24 hours
+   */
+  async getWhaleStats(threshold: number = 100000): Promise<WhaleStats> {
+    const cacheKey = `whale-stats-${threshold}`;
+    const cached = this.getFromCache(cacheKey);
+    if (cached) return cached;
+
+    const transactions = await this.getWhaleTransactions(threshold, 100);
+    const now = Date.now();
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+
+    // Filter to last 24 hours
+    const recent = transactions.filter(tx => tx.timestamp >= oneDayAgo);
+
+    // Calculate stats
+    const totalVolume = recent.reduce((sum, tx) => sum + tx.amount, 0);
+    const largest = recent.reduce((max, tx) => 
+      !max || tx.amount > max.amount ? tx : max, 
+      null as WhaleTransaction | null
+    );
+
+    // Group by address to find top whales
+    const volumeByAddress: Record<string, number> = {};
+    for (const tx of recent) {
+      volumeByAddress[tx.sender] = (volumeByAddress[tx.sender] || 0) + tx.amount;
+    }
+
+    const topWhales = Object.entries(volumeByAddress)
+      .map(([address, volume]) => ({ address, volume }))
+      .sort((a, b) => b.volume - a.volume)
+      .slice(0, 10);
+
+    const stats: WhaleStats = {
+      totalWhaleTransactions24h: recent.length,
+      totalWhaleVolume24h: totalVolume,
+      largestTransaction: largest,
+      topWhales,
+    };
+
+    this.setCache(cacheKey, stats);
+    return stats;
+  }
+
+  /**
+   * Check if an address is a known whale
+   * @param address STX address to check
+   * @param threshold Minimum balance to be considered a whale (default: 1M STX)
+   */
+  async isWhale(address: string, threshold: number = 1000000): Promise<boolean> {
+    try {
+      const response = await fetch(
+        `${this.config.apiUrl}/extended/v1/address/${address}/stx`
+      );
+      const data = await response.json();
+      const balance = Number(data.balance || 0) / 1_000_000;
+      return balance >= threshold;
+    } catch {
+      return false;
+    }
   }
 
   /**

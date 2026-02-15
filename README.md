@@ -9,6 +9,7 @@ DeFi analytics library for Stacks blockchain. Track prices, TVL, volume, and mar
 - **Volume Analysis**: 24h, 7d, 30d trading volumes
 - **Market Data**: Market cap, circulating supply, holder stats
 - **Historical Data**: Price and TVL history with customizable timeframes
+- **Whale Tracking**: Monitor large transactions and whale activity (NEW)
 
 ## Installation
 
@@ -76,6 +77,37 @@ Returns 24-hour trading volume.
 #### `getVolumeHistory(days: number)`
 
 Returns historical volume data.
+
+### Whale Tracking Functions
+
+#### `getWhaleTransactions(threshold?: number, limit?: number)`
+
+Returns large STX transfers above the threshold (default: 100,000 STX).
+
+```typescript
+const whales = await analytics.getWhaleTransactions(100000, 50);
+// Returns array of WhaleTransaction objects
+```
+
+#### `getWhaleStats(threshold?: number)`
+
+Returns aggregated whale statistics for the last 24 hours.
+
+```typescript
+const stats = await analytics.getWhaleStats();
+console.log(`Whale transactions: ${stats.totalWhaleTransactions24h}`);
+console.log(`Whale volume: ${stats.totalWhaleVolume24h.toLocaleString()} STX`);
+console.log(`Largest: ${stats.largestTransaction?.amount} STX`);
+```
+
+#### `isWhale(address: string, threshold?: number)`
+
+Check if an address is a whale (default threshold: 1M STX balance).
+
+```typescript
+const isWhale = await analytics.isWhale('SP...');
+// Returns true/false
+```
 
 ## Supported Protocols
 
